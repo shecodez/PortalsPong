@@ -1,0 +1,474 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>shecodez | Portals Pong</title>
+    <meta name="HTML5 Canvas" content="Classic Pong with a twist by Nicole J. Nobles">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <style>
+	    #game {
+	        position: absolute;
+	        margin: auto;
+	        /*cursor: none;*/
+	        background-color: #000;
+	        top: 0; right: 0; 
+	        bottom: 0; left: 0;
+	    }
+    </style>
+</head>
+<body>
+    <canvas id="game" width="512" height="256">
+    	<p>Your browser does not support HTML5!</p>
+    </canvas>
+
+    <script>
+
+    //TODO: (add) sound effects, music, particle effects, smash ability, elastic collision
+    //TODO: (fix) ai that never loses, speed up ball over time, portal loop should speed up ball
+    //TODO: (bug) keyboard control is not responsive, portal random teleports is expensive
+
+    (function() {
+		"use strict";
+    	
+    	// Globals
+        var canvas;
+        var orange = "#ff5d00"; //"#ff9a00"
+        var blue = "#0065ff"; //"#00a2ff";
+        var offset = 0;
+        var pb = 50; // portal bounds
+        var keystate;
+		var UP_ARROW=38, DOWN_ARROW=40;
+		var mousePos;
+
+        //function init() { resizeCanvas(); }
+
+        function Game() 
+        {
+        	canvas = document.getElementById("game");
+		    
+		    this.width = canvas.width;
+		    this.height = canvas.height;
+		    this.context = canvas.getContext("2d");
+		    this.context.fillStyle = "white";
+
+		    // ball
+		    this.ball = new Ball();
+
+		    // paddles
+		    this.p1 = new Paddle();
+		    this.p1.x = this.width - this.p1.width - this.p1.offset;
+		    
+		    this.p2 = new Paddle();
+		    this.p2.x = this.p2.offset;		  		    		   		    
+		    
+		    // portals
+		    this.b_portal = new Portal(99, 100, blue);
+		    this.o_portal = new Portal(this.width - 99, 200, orange);
+		    setTimeout(startTeleport, 5000); // <-- I dont like this.
+
+		    // displays
+		    this.display1 = new Display(this.width/4, 25);
+		    this.display2 = new Display(this.width*3/4, 25);
+
+		    keystate = {};
+			window.addEventListener("keydown", function (e) {
+				keystate[e.keyCode] = true;
+			}, false);
+			window.addEventListener("keyup", function (e) {
+				delete keystate[e.keyCode];
+			}, false);
+			/*canvas.addEventListener('mousemove', function(e) {
+				mousePos.x = e.x; mousePos.y = e.y;
+      		}, false);*/
+        }
+
+        Game.prototype.render = function()
+		{
+		    this.context.clearRect(0, 0, this.width, this.height);
+
+		    // sides and net
+		    this.context.fillRect(this.width/2, 0, 2, this.height);
+		    
+		    // ball
+		    this.ball.draw(this.context);
+		    
+		    // players
+		    this.p1.draw(this.context);
+    		this.p2.draw(this.context);
+
+    		// portals
+    		this.b_portal.draw(this.context);
+    		this.o_portal.draw(this.context);
+
+    		// score
+    		this.display1.draw(this.context);
+    		this.display2.draw(this.context);
+		};
+
+
+		Game.prototype.update = function() 
+		{
+		    if (this.paused) {
+		        return;
+		    }
+
+		    this.ball.move();
+		    this.ball.checkPaddleCollision();
+		    this.ball.checkPortalCollision();
+		    this.ball.checkBoundaryCollision();
+
+		    this.p1.player();
+		    this.p2.ai(this.ball);		    
+
+		    // ball collision with right/left wall
+		    if (this.ball.x >= this.width)
+        		this.score(this.p1);
+    		else if (this.ball.x + this.ball.size <= 0)
+        		this.score(this.p2);
+
+		    this.display1.value = this.p1.score;
+    		this.display2.value = this.p2.score;
+		};
+
+		Game.prototype.score = function(p) 
+		{
+		    // player scores
+		    p.score++;
+		    var player = (p == this.p1) ? 0 : 1;
+		 
+		    // reset ball position & direction
+		    var dir = (player == 1) ? -1 : 1; 
+		    this.ball.reset(dir);		    		    
+		};
+
+		Game.prototype.menu = function() 
+		{
+			var hcw = canvas.width/2;
+			var hch = canvas.height/2;
+
+        	this.context.font = "50px";
+        	this.context.fillStyle = "#fff";
+        	this.context.textAlign = "center";
+        	this.context.fillText("P   RTALS   P   NG", hcw, hch);
+
+        	this.o1 = new Portal(hcw-33, hch-5, blue);
+		    this.o2 = new Portal(hcw+23, hch-5, orange);
+		    this.o1.draw(this.context);
+		    this.o2.draw(this.context);		    		    	
+        	
+        	this.context.font = "20px";
+        	this.context.fillText("click to start", hcw, hch+25);
+        	
+        	/*function animate() {
+		    	this.clearRect(0, 0, canvas.width, canvas.height);
+		    	this.o1.draw(this.context);
+		    	this.o2.draw(this.context);
+			    setTimeout(animate, 1000/60);
+			}
+			animate();*/
+        };
+
+        var game = new Game(); 
+
+        function GameLoop() 
+		{
+			game.update();
+			game.render();
+			window.requestAnimFrame(GameLoop);
+		}
+
+        // Start game exe
+        window.onload = function() 
+        {
+            if(canvas !== null) {
+            	//game.menu();   
+                GameLoop();
+            }
+        };
+
+        window.requestAnimFrame = (function() 
+        {
+	        return window.requestAnimationFrame ||
+	            window.webkitRequestAnimationFrame ||
+	            window.mozRequestAnimationFrame ||
+	            window.oRequestAnimationFrame ||
+	            window.msRequestAnimationFrame ||
+	            function(callback) {
+	                window.setTimeout(callback, 1000 / 60);
+	            };
+        })();
+
+        function Display(x, y) {
+		    this.x = x;
+		    this.y = y;
+		    this.value = 0;
+		}
+		 
+		Display.prototype.draw = function(p) 
+		{
+		    p.fillText(this.value, this.x, this.y);
+		};
+
+        function Ball() 
+        {        	
+        	this.size = Math.ceil(canvas.width / 200);
+
+        	this.startX = Math.ceil((canvas.width - this.size) / 2);
+    		this.startY = Math.ceil((canvas.height - this.size) / 2);
+        	
+        	this.dx = 0;
+    		this.dy = 0;
+
+        	this.spd = this.maxSpd = canvas.width / 200;
+
+        	// init the ball
+        	//this.reset(); <-- causes err, but placing the same code below doesnt...
+        	this.direction = 1;
+
+        	this.x = this.startX;
+		    this.y = this.startY;
+
+		    // The ball starts out at half the max speed.
+		    this.dx = (this.maxSpd / 2) * this.direction;
+
+		    // The vertical velocity is random.
+		    this.dy = Math.max(parseInt(Math.random() * this.maxSpd), this.maxSpd / 4);
+		    this.dy *= (Math.random() < 0.5) ? 1 : -1;
+        }
+
+        Ball.prototype.reset = function(direction) 
+        {
+			this.direction = direction || -1;
+
+		    // Center the ball.
+		    this.x = this.startX;
+		    this.y = this.startY;
+
+		    // The ball starts out at half the max speed.
+		    this.dx = (this.maxSpd / 2) * this.direction;
+		    this.spd = this.dx;
+
+		    // The vertical velocity is random.
+		    this.dy = Math.max(parseInt(Math.random() * this.maxSpd), this.maxSpd / 4);
+		    this.dy *= (Math.random() < 0.5) ? 1 : -1;
+		};
+
+        Ball.prototype.move = function() 
+        {         
+            this.x += this.dx;
+    		this.y += this.dy;      
+        };
+
+        Ball.prototype.draw = function(p) 
+        {
+			//p.fillRect(this.x, this.y, this.size, this.size); // square
+			// circle
+			p.beginPath();
+			p.arc(this.x, this.y, this.size, Math.PI*2, false); 
+			p.fill();
+			p.closePath();
+		};
+
+        Ball.prototype.checkBoundaryCollision = function() 
+        {
+            if (this.y <= 0) {
+		    	this.dy *= -1;
+		    	this.y = 0;
+		    } else if (this.y + this.size >= canvas.height) {
+		      	this.dy *= -1;
+		      	this.y = canvas.height - this.size;
+		    }
+        };
+
+        Ball.prototype.checkPaddleCollision = function() 
+        {
+        	var p = (this.dx > 0) ? game.p1 : game.p2; // paddles
+        	if(AABBIntersect(p.x, p.y, p.width, p.height, this.x, this.y, this.size, this.size)) {
+        		/*var n = (this.y + this.size - p.y) / (p.height + this.size);
+        		var phi = 0.25 * Math.PI * (2*n -1); // pi/4 = 45        		
+        		this.dx = (p === game.p1 ? 1 : -1) * this.spd * Math.cos(phi); 
+        		this.dy = this.spd * Math.sin(phi);*/
+        		this.dx *= -1;	
+        	}
+        };
+
+        Ball.prototype.checkPortalCollision = function() 
+        {
+        	// ball collision with orange portal
+        	if (game.o_portal.collidable) {
+	        	var odx = this.x - game.o_portal.x;
+	        	var ody = this.y - game.o_portal.y;
+	        	var odistance = Math.sqrt(odx * odx + ody * ody);
+
+	        	if (odistance < this.size + game.o_portal.width) {
+        			this.port(game.b_portal.x, game.b_portal.y, game.b_portal);
+        			toggleCollidable(game.b_portal);
+	        	}
+        	}
+
+        	// ball collision with blue portal
+        	if (game.b_portal.collidable) {
+	        	var bdx = this.x - game.b_portal.x;
+	        	var bdy = this.y - game.b_portal.y;
+	        	var bdistance = Math.sqrt(bdx * bdx + bdy * bdy);
+
+	        	if (bdistance < this.size + game.b_portal.width) {
+        			this.port(game.o_portal.x, game.o_portal.y, game.o_portal);
+        			toggleCollidable(game.o_portal);
+	        	}
+        	}
+        };
+
+        Ball.prototype.port = function(x,y,p) 
+        {
+			this.x = x;
+		    this.y = y;
+
+		    setTimeout(function() {
+		    	toggleCollidable(p);
+		    }, 1000);
+        };
+
+        function toggleCollidable(object) {
+        	object.collidable = !object.collidable;
+        }        
+
+        function Paddle(offset) 
+        {
+        	this.offset = offset || 4;
+
+        	this.width = Math.ceil(canvas.width / 100);
+        	this.height = Math.ceil((canvas.height / 7));// * game.difficulty);
+        	
+        	this.x = 0;
+        	this.y = Math.ceil((canvas.height - this.height) / 2);
+
+        	this.startY = this.y;
+
+        	// speed (1/10th of a paddle per move)
+		    this.dy = Math.ceil(this.height / 7);
+        	
+        	this.score = 0;
+        }
+
+        Paddle.prototype.reset = function() 
+        {
+			this.y = this.startY;
+		};
+
+        Paddle.prototype.draw = function(p) 
+        { 	
+        	p.fillRect(this.x, this.y, this.width, this.height);
+        };
+
+		Paddle.prototype.ai = function(ball) 
+		{
+			if(ball.dx < 0) {
+				var d = ball.y - (this.height - ball.size) * 0.5;
+				this.y += (d - this.y) * (this.dy/100);
+			}
+			this.y = clamp(this.y, 0, canvas.height - this.height);
+					
+		};
+
+		Paddle.prototype.player = function()
+		{
+			if(keystate[DOWN_ARROW]) {
+				this.y += this.dy;
+			} else if(keystate[UP_ARROW]) {
+				this.y -= this.dy;
+			}
+
+			this.y = clamp(this.y, 0, canvas.height - this.height);
+		};
+
+        function Portal(x,y,color) 
+        {
+        	this.x = x;
+        	this.y = y;
+        	this.width = 5;
+        	this.height = 10;
+        	this.c = color;
+        	this.collidable = true;
+        }
+
+        Portal.prototype.draw = function(p) 
+        {
+        	p.save();
+        	p.translate(0.5, 0.5); // anti aliasing fix       	
+        	p.beginPath();
+        	
+        	p.setLineDash([2]);
+        	p.lineDashOffset = -offset;
+			//p.arc(this.x, this.y, this.height-3, Math.PI*2, false);
+			//ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle, anticlockwise)
+			p.ellipse(this.x, this.y, this.width, this.height, 0, 0, Math.PI*2);
+			
+			p.strokeStyle = this.c;
+			p.stroke();
+        	
+        	p.restore();
+        	
+        	this.march();
+        };
+
+        Portal.prototype.march = function() 
+        {
+        	offset++;
+        	if(offset > 16) {
+        		offset = 0;
+        	}
+        	setTimeout(this.march, 30);
+        };
+
+        function startTeleport() 
+        {
+        	var turn = random(1,100);
+        	
+        	if(turn < 50) {
+ 				game.b_portal.teleport();
+ 			} else { //(turn > 51)
+        		game.o_portal.teleport();
+        	}
+        }
+
+        Portal.prototype.teleport = function(seconds) 
+        {
+        	this.seconds = seconds || random(15,30);
+			
+			this.x = random(pb, canvas.width - pb);
+        	this.y = random(pb, canvas.height - pb);
+        	
+        	this.seconds *= 1000;
+        	setTimeout(function () {
+        		startTeleport();
+        	}, this.seconds);			
+        };
+
+        // helpers 
+        function random(min, max) {
+  			var num = Math.floor(Math.random() * (max - min + 1)) + min;
+  			return num;
+		}
+
+		function AABBIntersect(ax,ay,aw,ah,bx,by,bw,bh) {
+			return ax < bx+bw && bx < ax+aw && ay < by+bh  && by < ay+ah;
+		}
+
+		function clamp(val, min, max) {
+			return val < min ? min : (val > max ? max : val);
+		}
+
+        // sources:
+        // https://geeksretreat.wordpress.com/2013/11/15/a-simple-html5-game-walk-through-part-1/
+        // http://charlesleifer.com/blog/javascript-canvas-fun-pong/
+        // http://blog.mailson.org/2013/02/simple-pong-game-using-html5-and-canvas/
+        // https://developer.mozilla.org/en-US/docs/Games/Techniques/2D_collision_detection
+       
+    })();
+
+    </script>
+</body>
+</html>
